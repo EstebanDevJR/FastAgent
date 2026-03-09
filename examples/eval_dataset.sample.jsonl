@@ -1,0 +1,3 @@
+﻿# sample eval dataset (jsonl)
+{"expected":"hello","predicted":"hello world"}
+{"expected":"42","predicted":"tool gave 42"}

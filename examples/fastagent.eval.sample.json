@@ -1,0 +1,11 @@
+﻿{
+  "dataset": "examples/eval_dataset.sample.jsonl",
+  "thresholds": {
+    "accuracy_min": 0.8,
+    "reasoning_quality_min": 0.8,
+    "tool_usage_min": 0.0,
+    "hallucinations_max": 0.3,
+    "cost_max": 2.0
+  },
+  "report_path": "eval_report.json"
+}

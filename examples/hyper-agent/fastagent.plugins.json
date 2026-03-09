@@ -1,0 +1,11 @@
+{
+  "plugins": [
+    {
+      "name": "legal_suite",
+      "source": "local",
+      "module": "plugins.legal_suite",
+      "enabled": true,
+      "description": "legal tools bundle"
+    }
+  ]
+}

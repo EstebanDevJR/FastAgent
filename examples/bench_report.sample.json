@@ -1,0 +1,24 @@
+{
+  "url": "http://127.0.0.1:9/chat",
+  "total": 2,
+  "concurrency": 1,
+  "success": 0,
+  "failed": 2,
+  "success_rate": 0.0,
+  "latency_ms": {
+    "p50": 1012.5097499994808,
+    "p95": 1019.274399999631,
+    "p99": 1019.274399999631,
+    "avg": 1012.5097499994808
+  },
+  "failures": [
+    {
+      "status_code": 0,
+      "error": ""
+    },
+    {
+      "status_code": 0,
+      "error": ""
+    }
+  ]
+}
