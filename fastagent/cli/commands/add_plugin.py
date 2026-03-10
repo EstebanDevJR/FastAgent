@@ -5,7 +5,7 @@ import shutil
 import typer
 from rich.console import Console
 
-from fastagent.plugins.manifest import upsert_plugin
+from fastagent.plugins.manifest import SANDBOX_PROFILE_OPTIONS, upsert_plugin
 from fastagent.utils.project import ensure_project, plugin_manifest_path
 
 console = Console()
@@ -23,6 +23,7 @@ def add_plugin(
     module: str = typer.Option("", "--module", help="Python module path for the plugin."),
     description: str = typer.Option("", "--description", help="Plugin description."),
     enabled: bool = typer.Option(True, "--enabled/--disabled", help="Enable plugin by default."),
+    sandbox_profile: str = typer.Option("balanced", "--sandbox-profile", help="strict | balanced | off"),
     copy_from: Path | None = typer.Option(None, "--copy-from", help="Copy local plugin file/folder into project/plugins."),
 ) -> None:
     try:
@@ -37,6 +38,13 @@ def add_plugin(
         raise typer.Exit(code=1)
 
     normalized = _sanitize_name(raw_name)
+    profile = sandbox_profile.strip().lower()
+    if profile not in SANDBOX_PROFILE_OPTIONS:
+        console.print(
+            f"[red]Error:[/red] --sandbox-profile must be one of {', '.join(sorted(SANDBOX_PROFILE_OPTIONS))}."
+        )
+        raise typer.Exit(code=1)
+
     plugins_dir = project_path / "plugins"
     plugins_dir.mkdir(parents=True, exist_ok=True)
 
@@ -60,7 +68,12 @@ def add_plugin(
         "module": module or f"plugins.{normalized}",
         "enabled": enabled,
         "description": description,
+        "sandbox_profile": profile,
     }
 
-    manifest = upsert_plugin(plugin_manifest_path(project_path), plugin_record)
+    try:
+        manifest = upsert_plugin(plugin_manifest_path(project_path), plugin_record)
+    except ValueError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(code=1)
     console.print(f"[green]Plugin upserted:[/green] {normalized} ({len(manifest.get('plugins', []))} total)")

@@ -1,0 +1,7 @@
+{
+  "require_signed": true,
+  "trusted_key_ids": ["sample-key-1"],
+  "trusted_public_keys": [],
+  "allowed_registries": ["fastagent-local-sample"],
+  "allow_unsigned_plugins": []
+}

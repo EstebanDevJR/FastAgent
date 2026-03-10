@@ -12,6 +12,7 @@ class EvalGateThresholds:
     tool_usage_min: float = 0.0
     hallucinations_max: float = 0.4
     cost_max: float = 5.0
+    judge_score_min: float = 0.0
 
 
 @dataclass
@@ -42,10 +43,15 @@ def thresholds_from_config(config: dict) -> EvalGateThresholds:
         tool_usage_min=float(raw.get("tool_usage_min", 0.0)),
         hallucinations_max=float(raw.get("hallucinations_max", 0.4)),
         cost_max=float(raw.get("cost_max", 5.0)),
+        judge_score_min=float(raw.get("judge_score_min", 0.0)),
     )
 
 
-def evaluate_gate(metrics: EvalMetrics, thresholds: EvalGateThresholds) -> EvalGateResult:
+def evaluate_gate(
+    metrics: EvalMetrics,
+    thresholds: EvalGateThresholds,
+    judge_score: float | None = None,
+) -> EvalGateResult:
     reasons: list[str] = []
 
     if metrics.accuracy < thresholds.accuracy_min:
@@ -58,5 +64,7 @@ def evaluate_gate(metrics: EvalMetrics, thresholds: EvalGateThresholds) -> EvalG
         reasons.append(f"hallucinations {metrics.hallucinations} > {thresholds.hallucinations_max}")
     if metrics.cost > thresholds.cost_max:
         reasons.append(f"cost {metrics.cost} > {thresholds.cost_max}")
+    if judge_score is not None and judge_score < thresholds.judge_score_min:
+        reasons.append(f"judge_score {judge_score} < {thresholds.judge_score_min}")
 
     return EvalGateResult(passed=not reasons, reasons=reasons)

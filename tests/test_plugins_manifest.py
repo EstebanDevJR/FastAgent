@@ -19,6 +19,7 @@ def test_manifest_upsert_enable_disable_remove(tmp_path: Path) -> None:
     data = load_manifest(manifest_path)
     assert len(data["plugins"]) == 1
     assert data["plugins"][0]["enabled"] is True
+    assert data["plugins"][0]["sandbox_profile"] == "balanced"
 
     set_plugin_enabled(manifest_path, "sample_plugin", False)
     data = load_manifest(manifest_path)

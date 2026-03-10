@@ -30,6 +30,7 @@ def list_plugins(
     table = Table(title="FastAgent Plugins")
     table.add_column("Name", style="cyan")
     table.add_column("Enabled")
+    table.add_column("Profile")
     table.add_column("Module", style="green")
     table.add_column("Source", style="green")
 
@@ -39,6 +40,7 @@ def list_plugins(
         table.add_row(
             item.get("name", ""),
             f"[{color}]{enabled}[/{color}]",
+            str(item.get("sandbox_profile", "balanced")),
             item.get("module", ""),
             item.get("source", ""),
         )

@@ -1,0 +1,23 @@
+{
+  "name": "fastagent-local-sample",
+  "keys": [
+    {
+      "id": "sample-key-1",
+      "algorithm": "ed25519",
+      "public_key": "o2dXQfUuTn96NnGdndd1jtOOeaTTuIrAqyrj8/zO990="
+    }
+  ],
+  "plugins": [
+    {
+      "name": "currency_tool",
+      "description": "Sample currency conversion plugin.",
+      "source": "plugins/currency_tool.py",
+      "module": "plugins.currency_tool",
+      "filename": "currency_tool.py",
+      "sandbox_profile": "strict",
+      "sha256": "62ba7e1f4ac95030a4221ca749047e1a892ad98f063115d2d1e9a8205a725936",
+      "signing_key": "sample-key-1",
+      "signature": "05c7MP5c+EEsFbXxW96rM7fyZoig8JCK5AxpfsEOI3KzUmStmEs5bjWrGNybR4wYRN6fJ0+MJwEBLX7E782UDg=="
+    }
+  ]
+}

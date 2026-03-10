@@ -2,6 +2,8 @@ from importlib import import_module
 from pathlib import Path
 from typing import Callable
 
+from app.plugins.loader import load_plugin_tools
+
 
 def search_tool(query: str) -> str:
     return f"search results for: {query}"
@@ -48,4 +50,5 @@ def get_tools() -> dict[str, Callable[[str], str]]:
     tools["{{ tool }}"] = {{ tool }}
 {% endfor %}
     tools.update(_load_external_tools())
+    tools.update(load_plugin_tools())
     return tools
