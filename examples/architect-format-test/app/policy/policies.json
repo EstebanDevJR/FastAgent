@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "name": "block_prompt_injection",
+      "type": "deny_regex",
+      "pattern": "(?i)ignore (all|previous) instructions"
+    },
+    {
+      "name": "block_sensitive_secrets",
+      "type": "deny_regex",
+      "pattern": "(?i)api[_ -]?key|password|private[_ -]?token"
+    },
+    {
+      "name": "limit_message_length",
+      "type": "max_length",
+      "value": 5000
+    }
+  ]
+}

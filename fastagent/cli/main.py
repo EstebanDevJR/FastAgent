@@ -18,6 +18,7 @@ from fastagent.cli.commands.init_trust import init_trust
 from fastagent.cli.commands.install_plugin import install_plugin
 from fastagent.cli.commands.plugins import disable_plugin, enable_plugin, list_plugins
 from fastagent.cli.commands.redteam import generate_redteam
+from fastagent.cli.commands.release_ready import release_ready
 from fastagent.cli.commands.rollback_webhook import rollback_webhook
 from fastagent.cli.commands.rollout_apply import rollout_apply
 from fastagent.cli.commands.rollout_controller import rollout_controller
@@ -25,6 +26,7 @@ from fastagent.cli.commands.remove_plugin import remove_plugin_cmd
 from fastagent.cli.commands.run import run_project
 from fastagent.cli.commands.sign_plugin import sign_plugin
 from fastagent.cli.commands.trace_replay import trace_replay
+from fastagent.cli.commands.validate_artifacts import validate_artifacts
 from fastagent.cli.commands.verify_audit import verify_audit
 
 app = typer.Typer(
@@ -53,7 +55,9 @@ app.command("disable-plugin", help="Disable a configured plugin.")(disable_plugi
 app.command("add-plugin", help="Add or update a plugin in project manifest.")(add_plugin)
 app.command("remove-plugin", help="Remove a plugin from project manifest.")(remove_plugin_cmd)
 app.command("redteam", help="Generate synthetic red-team evaluation cases.")(generate_redteam)
+app.command("release-ready", help="Run release readiness checks for FastAgent repository.")(release_ready)
 app.command("trace-replay", help="Replay chat traces against an API endpoint.")(trace_replay)
+app.command("validate-artifacts", help="Validate JSON artifacts used in delivery/eval pipelines.")(validate_artifacts)
 app.command("verify-audit", help="Verify signed plugin audit log integrity.")(verify_audit)
 app.command("rollback-webhook", help="Trigger signed rollback webhook for deployment automation.")(rollback_webhook)
 app.command("rollout-controller", help="Automate phased canary rollout decisions from quality reports.")(rollout_controller)

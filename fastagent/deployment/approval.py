@@ -168,6 +168,8 @@ def record_request_escalation(
     status_code: int,
     error: str = "",
     response: str = "",
+    incident_key: str = "",
+    target_key: str = "",
 ) -> dict:
     count = int(request.get("escalation_count", 0))
     request["escalation_count"] = count + 1
@@ -183,9 +185,51 @@ def record_request_escalation(
         "status_code": int(status_code),
         "error": error,
         "response": response,
+        "incident_key": incident_key,
+        "target_key": target_key,
     }
+    _upsert_escalation_target(
+        request=request,
+        target_key=target_key or _default_target_key(channel=channel, url=url),
+        incident_key=incident_key,
+        channel=channel,
+        url=url,
+        dry_run=dry_run,
+        attempted=attempted,
+        sent=sent,
+        status_code=int(status_code),
+        error=error,
+        response=response,
+        timestamp=now,
+    )
     request["updated_at"] = now
     return request
+
+
+def build_request_incident_key(request: dict) -> str:
+    return "|".join(
+        [
+            str(request.get("id", "")),
+            str(request.get("status", "")),
+            str(request.get("reason", "")),
+            str(request.get("current_phase", "")),
+            str(request.get("next_phase", "")),
+            str(request.get("expires_at", "")),
+        ]
+    )
+
+
+def is_target_deduped(request: dict, target_key: str, incident_key: str) -> bool:
+    targets = request.get("escalation_targets", {})
+    if not isinstance(targets, dict):
+        return False
+    target = targets.get(target_key, {})
+    if not isinstance(target, dict):
+        return False
+    if str(target.get("incident_key", "")) != incident_key:
+        return False
+    status_code = int(target.get("status_code", 0))
+    return status_code < 400
 
 
 def _requests(state: dict) -> list[dict]:
@@ -229,6 +273,42 @@ def _format_iso(value: datetime) -> str:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc).isoformat()
+
+
+def _upsert_escalation_target(
+    request: dict,
+    target_key: str,
+    incident_key: str,
+    channel: str,
+    url: str,
+    dry_run: bool,
+    attempted: bool,
+    sent: bool,
+    status_code: int,
+    error: str,
+    response: str,
+    timestamp: str,
+) -> None:
+    targets = request.get("escalation_targets")
+    if not isinstance(targets, dict):
+        targets = {}
+        request["escalation_targets"] = targets
+    targets[target_key] = {
+        "timestamp": timestamp,
+        "incident_key": incident_key,
+        "channel": channel,
+        "url": url,
+        "dry_run": dry_run,
+        "attempted": attempted,
+        "sent": sent,
+        "status_code": int(status_code),
+        "error": error,
+        "response": response,
+    }
+
+
+def _default_target_key(channel: str, url: str) -> str:
+    return f"{channel}|{url}"
 
 
 def _shadow_passed(shadow_payload: dict | None) -> bool:

@@ -401,3 +401,114 @@ def test_autopilot_approval_expired_escalates_dry_run(tmp_path: Path) -> None:
     assert payload["approval"]["escalation"]["status"] == "dry_run"
     assert payload["approval"]["escalation"]["channel"] == "slack"
     assert payload["approval"]["escalation"]["attempted"] is True
+
+
+def test_autopilot_approval_escalation_dedupes_same_incident(tmp_path: Path) -> None:
+    baseline = _write_report(tmp_path / "baseline.json", accuracy=0.9, reasoning=0.9, hallucinations=0.1, cost=1.0)
+    candidate = _write_report(tmp_path / "candidate.json", accuracy=0.885, reasoning=0.87, hallucinations=0.1, cost=1.15)
+    state_file = tmp_path / "rollout.state.json"
+    approval_state = tmp_path / "rollout.approvals.json"
+    output_pending = tmp_path / "autopilot_pending.json"
+
+    pending = runner.invoke(
+        app,
+        [
+            "autopilot",
+            "--baseline-report",
+            str(baseline),
+            "--candidate-report",
+            str(candidate),
+            "--state-file",
+            str(state_file),
+            "--shadow-mode",
+            "none",
+            "--approval-gate",
+            "--approval-state-file",
+            str(approval_state),
+            "--approval-ttl-minutes",
+            "60",
+            "--webhook-environment",
+            "prod",
+            "--output-json",
+            str(output_pending),
+        ],
+    )
+    assert pending.exit_code == 5
+    pending_payload = json.loads(output_pending.read_text(encoding="utf-8"))
+    request_id = pending_payload["approval"]["request_id"]
+
+    state_payload = json.loads(approval_state.read_text(encoding="utf-8"))
+    state_payload["requests"][0]["expires_at"] = "2000-01-01T00:00:00+00:00"
+    approval_state.write_text(json.dumps(state_payload), encoding="utf-8")
+
+    first_output = tmp_path / "autopilot_expired_first.json"
+    first = runner.invoke(
+        app,
+        [
+            "autopilot",
+            "--baseline-report",
+            str(baseline),
+            "--candidate-report",
+            str(candidate),
+            "--state-file",
+            str(state_file),
+            "--shadow-mode",
+            "none",
+            "--approval-gate",
+            "--approval-state-file",
+            str(approval_state),
+            "--approval-request-id",
+            request_id,
+            "--approval-escalation-urls",
+            "https://hooks.slack.com/services/a/b/c,https://outlook.office.com/webhook/abc",
+            "--approval-escalation-mode",
+            "dry-run",
+            "--approval-escalation-cooldown-minutes",
+            "1",
+            "--webhook-environment",
+            "prod",
+            "--output-json",
+            str(first_output),
+        ],
+    )
+    assert first.exit_code == 7
+
+    state_payload = json.loads(approval_state.read_text(encoding="utf-8"))
+    state_payload["requests"][0]["last_escalated_at"] = "2000-01-01T00:00:00+00:00"
+    approval_state.write_text(json.dumps(state_payload), encoding="utf-8")
+
+    second_output = tmp_path / "autopilot_expired_second.json"
+    second = runner.invoke(
+        app,
+        [
+            "autopilot",
+            "--baseline-report",
+            str(baseline),
+            "--candidate-report",
+            str(candidate),
+            "--state-file",
+            str(state_file),
+            "--shadow-mode",
+            "none",
+            "--approval-gate",
+            "--approval-state-file",
+            str(approval_state),
+            "--approval-request-id",
+            request_id,
+            "--approval-escalation-urls",
+            "https://hooks.slack.com/services/a/b/c,https://outlook.office.com/webhook/abc",
+            "--approval-escalation-mode",
+            "dry-run",
+            "--approval-escalation-cooldown-minutes",
+            "1",
+            "--webhook-environment",
+            "prod",
+            "--output-json",
+            str(second_output),
+        ],
+    )
+    assert second.exit_code == 7
+    second_payload = json.loads(second_output.read_text(encoding="utf-8"))
+    esc = second_payload["approval"]["escalation"]
+    assert esc["status"] == "skipped_deduped"
+    assert esc["deduped"] >= 2

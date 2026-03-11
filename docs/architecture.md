@@ -27,7 +27,9 @@ Runtime and quality innovations:
 - End-to-end autopilot progressive delivery (`fastagent autopilot`)
 - Signed deployment webhook automation with environment policy (`dev|staging|prod`)
 - Human-in-the-loop approval gate (`fastagent autopilot --approval-gate`) with request lifecycle commands
-- Approval SLA (`expires_at`) with auto-escalation notifications (Slack/Teams/generic webhook)
+- Approval SLA (`expires_at`) with multi-target auto-escalation + incident dedupe (Slack/Teams/generic webhook)
+- Artifact schema validation command (`fastagent validate-artifacts`) for CI quality gates
+- Release readiness checker (`fastagent release-ready`) for publishing discipline
 - Synthetic Red Team dataset generator (`fastagent redteam`)
 - Trace replay harness for regression checks (`fastagent trace-replay`)
 - Model Router in generated apps (quality/latency/cost routing + fallback)

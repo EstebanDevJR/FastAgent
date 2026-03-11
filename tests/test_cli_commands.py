@@ -42,7 +42,9 @@ def test_new_commands_help() -> None:
     assert runner.invoke(app, ["generate-signing-key", "--help"]).exit_code == 0
     assert runner.invoke(app, ["sign-plugin", "--help"]).exit_code == 0
     assert runner.invoke(app, ["redteam", "--help"]).exit_code == 0
+    assert runner.invoke(app, ["release-ready", "--help"]).exit_code == 0
     assert runner.invoke(app, ["trace-replay", "--help"]).exit_code == 0
+    assert runner.invoke(app, ["validate-artifacts", "--help"]).exit_code == 0
     assert runner.invoke(app, ["verify-audit", "--help"]).exit_code == 0
     assert runner.invoke(app, ["rollback-webhook", "--help"]).exit_code == 0
     assert runner.invoke(app, ["rollout-controller", "--help"]).exit_code == 0

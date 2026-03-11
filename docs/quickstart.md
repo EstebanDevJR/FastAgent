@@ -52,7 +52,10 @@ fastagent autopilot --baseline-report baseline_eval.json --candidate-report cand
 fastagent autopilot --baseline-report baseline_eval.json --candidate-report candidate_eval.json --approval-gate --approval-state-file rollout.approvals.json --webhook-environment prod
 fastagent approval-list --state-file rollout.approvals.json
 fastagent approval-resolve --state-file rollout.approvals.json --request-id <id> --decision approve --approver ops-lead
-fastagent autopilot --baseline-report baseline_eval.json --candidate-report candidate_eval.json --approval-gate --approval-state-file rollout.approvals.json --approval-request-id <id> --approval-escalation-url "https://hooks.slack.com/services/XXX/YYY/ZZZ" --approval-escalation-mode dry-run --webhook-environment prod
+fastagent autopilot --baseline-report baseline_eval.json --candidate-report candidate_eval.json --approval-gate --approval-state-file rollout.approvals.json --approval-request-id <id> --approval-escalation-urls "https://hooks.slack.com/services/XXX/YYY/ZZZ,https://outlook.office.com/webhook/ABC/DEF" --approval-escalation-mode dry-run --approval-escalation-dedupe --webhook-environment prod
+fastagent validate-artifacts --artifact eval_report:eval_report.json --artifact canary_report:canary_report.json --artifact rollout_decision:rollout_decision.json
+fastagent release-ready --project-path . --run-tests
+powershell -ExecutionPolicy Bypass -File scripts/e2e.ps1
 fastagent doctor --project-path .
 fastagent bench --base-url http://127.0.0.1:8000 --endpoint /chat
 fastagent redteam --output redteam.jsonl --count 100 --domain "legal agents"

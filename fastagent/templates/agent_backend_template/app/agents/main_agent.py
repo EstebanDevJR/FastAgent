@@ -20,7 +20,7 @@ class MainAgent:
 
     def run(self, message: str, session_id: str | None = None) -> str:
         sid = session_id or "default"
-        history = self.memory.recall(sid)
+        history = self.memory.recall(sid, query=message)
 
         if settings.agent_type == "multi-agent":
             return self._run_multi_agent(message, sid, history)

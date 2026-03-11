@@ -1,0 +1,1 @@
+fastagent doctor --project-path .

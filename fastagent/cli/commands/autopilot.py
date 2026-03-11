@@ -7,10 +7,12 @@ from rich.console import Console
 from rich.table import Table
 
 from fastagent.deployment.approval import (
+    build_request_incident_key,
     ensure_request_expiry,
     find_request,
     get_or_create_pending_request,
     is_request_expired,
+    is_target_deduped,
     load_approval_state,
     mark_request_expired,
     record_request_escalation,
@@ -138,6 +140,11 @@ def autopilot(
         "--approval-escalation-url",
         help="Escalation webhook URL (Slack/Teams/generic). Falls back to FASTAGENT_APPROVAL_ESCALATION_WEBHOOK_URL.",
     ),
+    approval_escalation_urls: str = typer.Option(
+        "",
+        "--approval-escalation-urls",
+        help="Comma-separated escalation URLs. Also reads FASTAGENT_APPROVAL_ESCALATION_WEBHOOK_URLS.",
+    ),
     approval_escalation_secret: str = typer.Option(
         "",
         "--approval-escalation-secret",
@@ -162,6 +169,11 @@ def autopilot(
         60,
         "--approval-escalation-cooldown-minutes",
         help="Min minutes between repeated escalation notifications for the same request.",
+    ),
+    approval_escalation_dedupe: bool = typer.Option(
+        True,
+        "--approval-escalation-dedupe/--no-approval-escalation-dedupe",
+        help="Skip duplicate escalation notifications for the same incident and target.",
     ),
     output_json: Path | None = typer.Option(None, "--output-json", help="Optional output report path."),
 ) -> None:
@@ -363,11 +375,13 @@ def autopilot(
                 deployment_id=deployment_id,
                 policy_environment=policy.environment,
                 escalation_url=approval_escalation_url,
+                escalation_urls=approval_escalation_urls,
                 escalation_secret=approval_escalation_secret,
                 escalation_mode=normalized_escalation_mode,
                 escalation_channel=normalized_escalation_channel,
                 escalation_timeout=approval_escalation_timeout,
                 escalation_cooldown_minutes=approval_escalation_cooldown_minutes,
+                escalation_dedupe=approval_escalation_dedupe,
             )
         except (ValueError, typer.BadParameter) as exc:
             console.print(f"[red]Error:[/red] {exc}")
@@ -455,7 +469,9 @@ def autopilot(
             "approval_escalation_mode": normalized_escalation_mode,
             "approval_escalation_channel": normalized_escalation_channel,
             "approval_escalation_url": bool(approval_escalation_url.strip()),
+            "approval_escalation_urls": bool(approval_escalation_urls.strip()),
             "approval_escalation_cooldown_minutes": approval_escalation_cooldown_minutes,
+            "approval_escalation_dedupe": approval_escalation_dedupe,
         },
     }
     if output_json is not None:
@@ -539,6 +555,9 @@ def _build_approval_escalation_report(enabled: bool) -> dict:
         "status": "disabled" if not enabled else "skipped",
         "attempted": False,
         "sent": False,
+        "destinations": [],
+        "deduped": 0,
+        "skipped": 0,
         "dry_run": False,
         "channel": "",
         "url": "",
@@ -550,17 +569,46 @@ def _build_approval_escalation_report(enabled: bool) -> dict:
     }
 
 
+def _resolve_escalation_targets(escalation_url: str, escalation_urls: str) -> list[str]:
+    values: list[str] = []
+    env_multi = os.getenv("FASTAGENT_APPROVAL_ESCALATION_WEBHOOK_URLS", "").strip()
+    env_single = os.getenv("FASTAGENT_APPROVAL_ESCALATION_WEBHOOK_URL", "").strip()
+    for source in (escalation_urls, env_multi):
+        text = source.strip()
+        if not text:
+            continue
+        for part in text.split(","):
+            candidate = part.strip()
+            if candidate:
+                values.append(candidate)
+    if escalation_url.strip():
+        values.append(escalation_url.strip())
+    elif env_single:
+        values.append(env_single)
+
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        deduped.append(value)
+    return deduped
+
+
 def _process_approval_escalation(
     approval_report: dict,
     state_file: Path,
     deployment_id: str,
     policy_environment: str,
     escalation_url: str,
+    escalation_urls: str,
     escalation_secret: str,
     escalation_mode: str,
     escalation_channel: str,
     escalation_timeout: float,
     escalation_cooldown_minutes: int,
+    escalation_dedupe: bool,
 ) -> dict:
     report = _build_approval_escalation_report(enabled=True)
     status = str(approval_report.get("status", "")).strip()
@@ -572,13 +620,12 @@ def _process_approval_escalation(
         report["reason"] = "approval_not_expired"
         return report
 
-    resolved_url = escalation_url.strip() or os.getenv("FASTAGENT_APPROVAL_ESCALATION_WEBHOOK_URL", "").strip()
-    if not resolved_url:
+    targets = _resolve_escalation_targets(escalation_url=escalation_url, escalation_urls=escalation_urls)
+    if not targets:
         report["status"] = "skipped"
         report["reason"] = "missing_escalation_url"
         return report
     resolved_secret = escalation_secret.strip() or os.getenv("FASTAGENT_APPROVAL_ESCALATION_WEBHOOK_SECRET", "").strip()
-    channel = detect_channel(resolved_url, channel=escalation_channel)
 
     state = load_approval_state(state_file)
     request_id = str(approval_report.get("request_id", "")).strip()
@@ -588,69 +635,131 @@ def _process_approval_escalation(
     if not should_escalate_request(request, cooldown_minutes=escalation_cooldown_minutes):
         report["status"] = "skipped"
         report["reason"] = "cooldown_active"
-        report["channel"] = channel
-        report["url"] = resolved_url
+        if targets:
+            report["channel"] = detect_channel(targets[0], channel=escalation_channel)
+            report["url"] = targets[0]
         return report
 
+    incident_key = build_request_incident_key(request)
     dry_run = escalation_mode == "dry-run" or (escalation_mode == "auto" and policy_environment == "dev")
-    payload = build_escalation_payload(
-        channel=channel,
-        deployment_id=deployment_id,
-        environment=policy_environment,
-        request=request,
-        state_file=str(state_file),
-    )
-
-    status_code = 0
-    response_text = ""
-    error = ""
-    attempted = True
-    sent = False
-    if dry_run:
-        status = "dry_run"
-    else:
-        status = "sent"
-        sent = True
-        try:
-            status_code, response_text = post_escalation_notification(
-                url=resolved_url,
-                payload=payload,
-                timeout=escalation_timeout,
-                secret=resolved_secret,
+    destinations: list[dict] = []
+    sent_count = 0
+    attempted_count = 0
+    failed_count = 0
+    deduped_count = 0
+    skipped_count = 0
+    last_payload: dict = {}
+    for resolved_url in targets:
+        channel = detect_channel(resolved_url, channel=escalation_channel)
+        target_key = f"{channel}|{resolved_url}"
+        if escalation_dedupe and is_target_deduped(request, target_key=target_key, incident_key=incident_key):
+            destinations.append(
+                {
+                    "url": resolved_url,
+                    "channel": channel,
+                    "status": "deduped",
+                    "attempted": False,
+                    "sent": False,
+                    "status_code": 0,
+                    "error": "",
+                    "response": "",
+                }
             )
-        except Exception as exc:
-            status_code, response_text = 599, ""
-            error = str(exc)
-        if status_code >= 400:
-            status = "failed"
+            deduped_count += 1
+            continue
 
-    record_request_escalation(
-        request=request,
-        channel=channel,
-        url=resolved_url,
-        dry_run=dry_run,
-        attempted=attempted,
-        sent=sent,
-        status_code=int(status_code),
-        error=error,
-        response=response_text,
-    )
+        payload = build_escalation_payload(
+            channel=channel,
+            deployment_id=deployment_id,
+            environment=policy_environment,
+            request=request,
+            state_file=str(state_file),
+        )
+        last_payload = payload
+        status_code = 0
+        response_text = ""
+        error = ""
+        attempted = True
+        sent = False
+        destination_status = "dry_run"
+        attempted_count += 1
+
+        if not dry_run:
+            destination_status = "sent"
+            sent = True
+            sent_count += 1
+            try:
+                status_code, response_text = post_escalation_notification(
+                    url=resolved_url,
+                    payload=payload,
+                    timeout=escalation_timeout,
+                    secret=resolved_secret,
+                )
+            except Exception as exc:
+                status_code, response_text = 599, ""
+                error = str(exc)
+            if status_code >= 400:
+                destination_status = "failed"
+                failed_count += 1
+
+        record_request_escalation(
+            request=request,
+            channel=channel,
+            url=resolved_url,
+            dry_run=dry_run,
+            attempted=attempted,
+            sent=sent,
+            status_code=int(status_code),
+            error=error,
+            response=response_text,
+            incident_key=incident_key,
+            target_key=target_key,
+        )
+        destinations.append(
+            {
+                "url": resolved_url,
+                "channel": channel,
+                "status": destination_status,
+                "attempted": attempted,
+                "sent": sent,
+                "status_code": int(status_code),
+                "error": error,
+                "response": response_text,
+            }
+        )
+
+    skipped_count = len([item for item in destinations if item.get("status") == "deduped"])
     save_approval_state(state_file, state)
     approval_report["request"] = request
 
+    if attempted_count == 0 and deduped_count > 0:
+        overall_status = "skipped_deduped"
+    elif failed_count > 0:
+        overall_status = "failed"
+    elif dry_run and attempted_count > 0:
+        overall_status = "dry_run"
+    elif sent_count > 0:
+        overall_status = "sent"
+    else:
+        overall_status = "skipped"
+
+    first = destinations[0] if destinations else {}
     report.update(
         {
-            "status": status,
-            "attempted": attempted,
-            "sent": sent,
+            "status": overall_status,
+            "attempted": attempted_count > 0,
+            "sent": sent_count > 0,
+            "destinations": destinations,
+            "deduped": deduped_count,
+            "skipped": skipped_count,
             "dry_run": dry_run,
-            "channel": channel,
-            "url": resolved_url,
-            "status_code": int(status_code),
-            "response": response_text,
-            "error": error,
+            "channel": str(first.get("channel", "")),
+            "url": str(first.get("url", "")),
+            "status_code": int(first.get("status_code", 0)),
+            "response": str(first.get("response", "")),
+            "error": str(first.get("error", "")),
             "reason": "approval_expired_escalation",
-            "payload": payload,
+            "payload": last_payload,
         }
     )
     return report

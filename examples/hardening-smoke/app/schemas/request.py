@@ -13,3 +13,8 @@ class ChatResponse(BaseModel):
 class EvalRequest(BaseModel):
     expected: str
     predicted: str
+
+
+class PolicyCheckRequest(BaseModel):
+    message: str = Field(..., min_length=1)
+    session_id: str | None = None

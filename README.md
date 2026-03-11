@@ -42,7 +42,10 @@ fastagent doctor --project-path <path>
 fastagent bench --base-url http://127.0.0.1:8000 --endpoint /chat
 fastagent init-ci --project-path <path>
 fastagent redteam --output redteam.jsonl --count 100 --domain "legal agents"
+fastagent release-ready --project-path . --run-tests
 fastagent trace-replay --trace-file logs/traces.jsonl --base-url http://127.0.0.1:8000
+fastagent validate-artifacts --artifact eval_report:eval_report.json --artifact canary_report:canary_report.json
+powershell -ExecutionPolicy Bypass -File scripts/e2e.ps1
 fastagent verify-audit --log-file logs/plugin_audit.jsonl
 fastagent rollback-webhook --url https://deploy.example/hooks/rollback --secret $FASTAGENT_ROLLBACK_WEBHOOK_SECRET --dry-run
 fastagent approval-list --state-file rollout.approvals.json
@@ -211,11 +214,35 @@ fastagent autopilot \
   --approval-gate \
   --approval-state-file rollout.approvals.json \
   --approval-request-id <id> \
-  --approval-escalation-url "https://hooks.slack.com/services/XXX/YYY/ZZZ" \
+  --approval-escalation-urls "https://hooks.slack.com/services/XXX/YYY/ZZZ,https://outlook.office.com/webhook/ABC/DEF" \
   --approval-escalation-mode dry-run \
+  --approval-escalation-dedupe \
   --webhook-environment prod \
   --output-json autopilot_expired.json
 # exit code 7 => approval expired
+```
+
+Validate pipeline artifacts before promotion:
+
+```bash
+fastagent validate-artifacts \
+  --artifact eval_report:eval_report.json \
+  --artifact canary_report:canary_report.json \
+  --artifact rollout_decision:rollout_decision.json \
+  --artifact autopilot_report:autopilot_report.json
+```
+
+Release readiness checklist:
+
+```bash
+fastagent release-ready --project-path . --run-tests --output-json release_ready.json
+```
+
+One-command local end-to-end smoke:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/e2e.ps1
+# Optional: -SkipRepoTests -SkipProjectInstall -CleanupWorkDir
 ```
 
 Optional policy override file:
